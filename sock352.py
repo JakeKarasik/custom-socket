@@ -1,4 +1,3 @@
-
 import binascii
 import socket as syssock
 import struct
@@ -14,7 +13,7 @@ def init(UDPportTx, UDPportRx):   # initialize your UDP socket here
     RECV_PORT = UDPportTx
     SEND_PORT = UDPportRx
 
-    # Header Default
+    # Header Default Structure & Values
     global PKT_HEADER_DATA, HEADER_LEN, VERSION, OPT_PTR, PROTOCOL, SRC_PORT, DEST_PORT, WINDOW, CHECKSUM
     PKT_HEADER_DATA = struct.Struct('!BBBBHHLLQQLL')
     HEADER_LEN = sys.getsizeof(PKT_HEADER_DATA)
@@ -36,11 +35,11 @@ def init(UDPportTx, UDPportRx):   # initialize your UDP socket here
 
 class socket:
     
-    def __init__(self):  # fill in your code here 
+    def __init__(self):
         self.sock = syssock.socket(syssock.AF_INET, syssock.SOCK_DGRAM)
     
     def bind(self, address):
-        return 
+        self.sock.bind(address)
 
     def connect(self, address):  # fill in your code here
     	# Bind < NO
@@ -52,29 +51,56 @@ class socket:
     	# If there is error, send header again
 
 
+        # Connect to server address
         self.sock.connect(address)
+
+        # Create SYN header
         seq_num = 0
         ack_num = seq_num + 1
         payload_len = 0
 
-        header = PKT_HEADER_DATA.pack(  VERSION,
-                                        SYN,
-                                        OPT_PTR,
-                                        PROTOCOL,
-                                        CHECKSUM,
-                                        SRC_PORT,
-                                        DEST_PORT,
-                                        seq_num,
-                                        ack_num,
-                                        WINDOW,
-                                        payload_len )
+        syn_header = PKT_HEADER_DATA.pack(  VERSION,
+                                            SYN,
+                                            OPT_PTR,
+                                            PROTOCOL,
+                                            CHECKSUM,
+                                            SRC_PORT,
+                                            DEST_PORT,
+                                            seq_num,
+                                            ack_num,
+                                            WINDOW,
+                                            payload_len )
 
-        self.send(header)
+        ack_header = PKT_HEADER_DATA.pack(  VERSION,
+                                            SYN,
+                                            OPT_PTR,
+                                            PROTOCOL,
+                                            CHECKSUM,
+                                            SRC_PORT,
+                                            DEST_PORT,
+                                            seq_num+1,
+                                            ack_num+1,
+                                            WINDOW,
+                                            payload_len ) # TODO
+
+        # Set timeout to 0.2 seconds and send SYN packet A
+        self.sock.settimeout(0.2)
+        self.sock.send(syn_header)
+        for i in range(0, 10):
+            while True:
+                try:
+                    # Receive SYN ACK packet B
+                    data, server = self.sock.recvfrom(1024)
+                    print 'Worked: %s' % (data)
+                    # Send ACK packet C
+                    self.sock.send(ack_header)
+                except syssock.timeout:
+                    # Resend on timeout
+                    print 'REQUEST TIMED OUT, RESENDING...'
+                    continue
+                break
 
 
-
-        return 
-    
     def listen(self, backlog):
         return
 
