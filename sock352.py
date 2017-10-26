@@ -21,7 +21,7 @@ def init(UDPportTx, UDPportRx):   # initialize your UDP socket here
 	global PKT_HEADER_DATA, PKT_HEADER_FMT, HEADER_LEN, VERSION, OPT_PTR, PROTOCOL, SRC_PORT, DEST_PORT, WINDOW, CHECKSUM
 	PKT_HEADER_FMT = '!BBBBHHLLQQLL'
 	PKT_HEADER_DATA = struct.Struct(PKT_HEADER_FMT)
-	HEADER_LEN = sys.getsizeof(PKT_HEADER_DATA)
+	HEADER_LEN = struct.calcsize(PKT_HEADER_FMT)
 	VERSION = 0x1
 	OPT_PTR = 0
 	PROTOCOL = 0
@@ -54,7 +54,6 @@ class socket:
 		# send ACK C
 		# If there is error, send header again
 
-
 	    # Connect to server address
 		MAIN_SOCKET.connect(address)
 
@@ -76,35 +75,72 @@ class socket:
 											WINDOW,
 											payload_len )
 
+	    # Set timeout to 0.2 seconds
+		MAIN_SOCKET.settimeout(0.2)
+
+		# Attempt to send SYN packet A
+		try:
+			MAIN_SOCKET.sendall(syn_header)
+		except syssock.error: 
+			print("Failed to send SYN packet A")
+
+		done = False
+		response = []
+		bytesreceived = 0
+		for i in range(0, 5):
+			if (done):
+				break
+			while not done:
+				try:
+					# Receive SYN ACK packet B
+					(data, address) = MAIN_SOCKET.recvfrom(HEADER_LEN)
+					response.append(data)
+					bytesreceived += len(data)
+					if (bytesreceived == HEADER_LEN):
+						done = True
+						break
+				except syssock.timeout:
+					# Resend on timeout
+					print("REQUEST TIMED OUT, RESENDING...")
+					i += 1
+					break
+				except syssock.error:
+					print("Failed to send/receive... trying again")
+					i += 1
+					break
+
+		# Put packets together
+		response = "".join(response)
+		response_as_struct = struct.unpack(PKT_HEADER_FMT,response)
+
+		print(response_as_struct)
+
+		# Check correct response
+		if (response_as_struct[1] != SYN | ACK):
+			print("Error: Received packet is not SYN-ACK")
+
+		new_seq_num = response_as_struct[9]
+		new_ack_num = response_as_struct[8] + 1
+
+
 		ack_header = PKT_HEADER_DATA.pack(	VERSION,
-											ACK,
+											SYN | ACK,
 											OPT_PTR,
 											PROTOCOL,
 											HEADER_LEN,
 											CHECKSUM,
 											SRC_PORT,
 											DEST_PORT,
-											seq_num+1,
-											ack_num+1,
+											new_seq_num,
+											new_ack_num,
 											WINDOW,
-											payload_len ) # TODO
+											payload_len )
 
-	    # Set timeout to 0.2 seconds and send SYN packet A
-		MAIN_SOCKET.settimeout(0.2)
-		MAIN_SOCKET.send(syn_header)
-		for i in range(0, 10):
-			while True:
-				try:
-					# Receive SYN ACK packet B
-					data, server = MAIN_SOCKET.recvfrom(HEADER_LEN)
-					print('Worked: %s' % (data))
-					# Send ACK packet C
-					MAIN_SOCKET.send(ack_header)
-				except syssock.timeout:
-					# Resend on timeout
-					print('REQUEST TIMED OUT, RESENDING...')
-					continue
-				break
+		# Attempt to send ACK packet C
+		try:
+			MAIN_SOCKET.sendall(ack_header)
+		except syssock.error: 
+			print("Failed to send ACK packet C")
 
 
 	def listen(self, backlog):
@@ -119,7 +155,9 @@ class socket:
 		data = None
 		while (data is None):
 			(data, address) = MAIN_SOCKET.recvfrom(HEADER_LEN)
-	    
+
+		print(struct.unpack(PKT_HEADER_FMT, data))
+
 	    # Check is valid SYN
 		recv_header = struct.unpack(PKT_HEADER_FMT, data)
 
@@ -131,7 +169,7 @@ class socket:
 		ack_num = recv_header[8] + 1 # client seq_num + 1
 		payload_len = 0		
 
-		# Send SYN ACK B
+		# Create SYN ACK B
 		syn_header = PKT_HEADER_DATA.pack(	VERSION,
 											SYN | ACK,
 											OPT_PTR,
@@ -145,13 +183,20 @@ class socket:
 											WINDOW,
 											payload_len)
 
-		MAIN_SOCKET2 = syssock.socket(syssock.AF_INET, syssock.SOCK_DGRAM)
-		MAIN_SOCKET2.bind((address[0],RECV_PORT))
-		bytessent = 0
-		while (bytessent != HEADER_LEN):
-			bytessent += MAIN_SOCKET2.send(syn_header)
+		try:
+			MAIN_SOCKET.sendto(syn_header, address)
+		except syssock.error as e: 
+			print(str(e))
+			print("Failed to send SYN ACK B")
 
-		return (MAIN_SOCKET2, address)
+		# recv SYN-ACK C
+		data = None
+		while (data is None):
+			(data, address) = MAIN_SOCKET.recvfrom(HEADER_LEN)
+
+		print(struct.unpack(PKT_HEADER_FMT, data))
+
+		return (MAIN_SOCKET, address)
 
 	def close(self):   # fill in your code here 
 	    return 
