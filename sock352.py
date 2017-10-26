@@ -78,18 +78,20 @@ class socket:
 	    # Set timeout to 0.2 seconds
 		MAIN_SOCKET.settimeout(0.2)
 
-		# Attempt to send SYN packet A
-		try:
-			MAIN_SOCKET.sendall(syn_header)
-		except syssock.error: 
-			print("Failed to send SYN packet A")
-
 		done = False
 		response = []
 		bytesreceived = 0
 		for i in range(0, 5):
+
 			if (done):
 				break
+
+			# Attempt to send SYN packet A
+			try:
+				MAIN_SOCKET.sendall(syn_header)
+			except syssock.error: 
+				print("Failed to send SYN packet A")
+
 			while not done:
 				try:
 					# Receive SYN ACK packet B
@@ -108,6 +110,11 @@ class socket:
 					print("Failed to send/receive... trying again")
 					i += 1
 					break
+
+		# Check if header successfully received
+		if (bytesreceived != HEADER_LEN):
+			print("Failed to receive.")
+			return
 
 		# Put packets together
 		response = "".join(response)
@@ -152,14 +159,12 @@ class socket:
 		# ACK C
 
 		# recv SYN A
-		data = None
-		while (data is None):
-			(data, address) = MAIN_SOCKET.recvfrom(HEADER_LEN)
-
-		print(struct.unpack(PKT_HEADER_FMT, data))
+		(data, address) = MAIN_SOCKET.recvfrom(HEADER_LEN)
 
 	    # Check is valid SYN
 		recv_header = struct.unpack(PKT_HEADER_FMT, data)
+
+		print(recv_header)
 
 		if (recv_header[1] != SYN):
 			print("Error: Received packet is not SYN")
@@ -167,7 +172,9 @@ class socket:
 		# Create SYN header
 		seq_num = 29 # random number
 		ack_num = recv_header[8] + 1 # client seq_num + 1
-		payload_len = 0		
+		payload_len = 0
+		# If there is an existing connection, the RESET flag is set. 
+		#TODO	
 
 		# Create SYN ACK B
 		syn_header = PKT_HEADER_DATA.pack(	VERSION,
@@ -185,14 +192,11 @@ class socket:
 
 		try:
 			MAIN_SOCKET.sendto(syn_header, address)
-		except syssock.error as e: 
-			print(str(e))
+		except syssock.error: 
 			print("Failed to send SYN ACK B")
 
 		# recv SYN-ACK C
-		data = None
-		while (data is None):
-			(data, address) = MAIN_SOCKET.recvfrom(HEADER_LEN)
+		(data, address) = MAIN_SOCKET.recvfrom(HEADER_LEN)
 
 		print(struct.unpack(PKT_HEADER_FMT, data))
 
