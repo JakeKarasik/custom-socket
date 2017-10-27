@@ -11,11 +11,11 @@ def init(UDPportTx, UDPportRx):   # initialize your UDP socket here
 	#Initialize UDP socket
 	global MAIN_SOCKET
 	MAIN_SOCKET = syssock.socket(syssock.AF_INET, syssock.SOCK_DGRAM)
-
-	# UDP Port
-	global RECV_PORT, SEND_PORT
-	RECV_PORT = UDPportTx
-	SEND_PORT = UDPportRx
+	
+	# Save recv port for server binding
+	global portRx, portTx
+	portRx = int(UDPportRx)
+	portTx = int(UDPportTx)
 
     # Header Default Structure & Values
 	global PKT_HEADER_DATA, PKT_HEADER_FMT, HEADER_LEN, VERSION, OPT_PTR, PROTOCOL, SRC_PORT, DEST_PORT, WINDOW, CHECKSUM
@@ -38,15 +38,19 @@ def init(UDPportTx, UDPportRx):   # initialize your UDP socket here
 	RES = 0b00001000
 	OPT = 0b00010000
 
+	# Connection is set?
+	global CONNECT_SET
+	CONNECTION_SET = False
+
 class socket:
     
 	def __init__(self):
 		pass
 
 	def bind(self, address):
-	    MAIN_SOCKET.bind(address)
+		MAIN_SOCKET.bind(('',portRx))
 
-	def connect(self, address):  # fill in your code here
+	def connect(self, address):
 		# Create the SYN header
 		# Send the SYN packet A
 		# Start timer
@@ -55,7 +59,7 @@ class socket:
 		# If there is error, send header again
 
 	    # Connect to server address
-		MAIN_SOCKET.connect(address)
+		MAIN_SOCKET.connect((address[0], portTx))
 
 	    # Create SYN header
 		seq_num = 19 # random number
@@ -81,6 +85,8 @@ class socket:
 		done = False
 		response = []
 		bytesreceived = 0
+
+		# Attempt to resend up to 5 times
 		for i in range(0, 5):
 
 			if (done):
@@ -91,23 +97,30 @@ class socket:
 				MAIN_SOCKET.sendall(syn_header)
 			except syssock.error: 
 				print("Failed to send SYN packet A")
+				continue
 
 			while not done:
 				try:
 					# Receive SYN ACK packet B
 					(data, address) = MAIN_SOCKET.recvfrom(HEADER_LEN)
+					
+					# Append packet to response array
 					response.append(data)
+
+					# Add size of packet to bytes received
 					bytesreceived += len(data)
+
+					# Check if done receiving
 					if (bytesreceived == HEADER_LEN):
 						done = True
 						break
 				except syssock.timeout:
 					# Resend on timeout
-					print("REQUEST TIMED OUT, RESENDING...")
+					print("Request timed out, resending")
 					i += 1
 					break
 				except syssock.error:
-					print("Failed to send/receive... trying again")
+					print("Failed to send/receive, trying again")
 					i += 1
 					break
 
@@ -123,12 +136,16 @@ class socket:
 		print(response_as_struct)
 
 		# Check correct response
-		if (response_as_struct[1] != SYN | ACK):
-			print("Error: Received packet is not SYN-ACK")
+		if (response_as_struct[1] != SYN | ACK and response_as_struct[1] != RES):
+			print("Error: Received packet is not SYN-ACK or RES")
 
+		# Notify RESET flag received
+		if (response_as_struct[1] == RES):
+			print("Notice: RESET flag received")
+
+		# Create SYN-ACK header
 		new_seq_num = response_as_struct[9]
 		new_ack_num = response_as_struct[8] + 1
-
 
 		ack_header = PKT_HEADER_DATA.pack(	VERSION,
 											SYN | ACK,
@@ -157,6 +174,7 @@ class socket:
 		# recv SYN A
 		# send SYN ACK B
 		# ACK C
+		global CONNECTION_SET
 
 		# recv SYN A
 		(data, address) = MAIN_SOCKET.recvfrom(HEADER_LEN)
@@ -173,12 +191,13 @@ class socket:
 		seq_num = 29 # random number
 		ack_num = recv_header[8] + 1 # client seq_num + 1
 		payload_len = 0
+		
 		# If there is an existing connection, the RESET flag is set. 
-		#TODO	
+		flags = SYN | ACK if not CONNECT_SET else RES
 
 		# Create SYN ACK B
 		syn_header = PKT_HEADER_DATA.pack(	VERSION,
-											SYN | ACK,
+											flags,
 											OPT_PTR,
 											PROTOCOL,
 											HEADER_LEN,
@@ -200,9 +219,14 @@ class socket:
 
 		print(struct.unpack(PKT_HEADER_FMT, data))
 
+		# Mark connection as set
+		CONNECTION_SET = True
+
 		return (MAIN_SOCKET, address)
 
 	def close(self):   # fill in your code here 
+		global CONNECTION_SET
+		CONNECTION_SET = False
 	    return 
 
 	def send(self, buffer):
