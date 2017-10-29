@@ -10,6 +10,8 @@ import time
 import struct 
 import md5
 import os 
+import sys
+sys.path.append('C:\Users\Jake\Desktop\School\Senior\Internet Technology\Project_Part_1')
 import sock352
 
 def main():

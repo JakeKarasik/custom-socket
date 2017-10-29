@@ -2,6 +2,7 @@ import binascii
 import socket as syssock
 import struct
 import sys
+import math
 
 # these functions are global to the class and
 # define the UDP ports all messages are sent
@@ -42,6 +43,7 @@ def init(UDPportTx, UDPportRx):   # initialize your UDP socket here
 	global CONNECTION_SET
 	CONNECTION_SET = False
 
+	global cl_addr
 class socket:
     
 	def __init__(self):
@@ -133,7 +135,7 @@ class socket:
 		response = "".join(response)
 		response_as_struct = struct.unpack(PKT_HEADER_FMT,response)
 
-		print(response_as_struct)
+		# print(response_as_struct)
 
 		# Check correct response
 		if (response_as_struct[1] != SYN | ACK and response_as_struct[1] != RES):
@@ -179,10 +181,13 @@ class socket:
 		# recv SYN A
 		(data, address) = MAIN_SOCKET.recvfrom(HEADER_LEN)
 
+		global cl_addr
+		cl_addr = address
+
 	    # Check is valid SYN
 		recv_header = struct.unpack(PKT_HEADER_FMT, data)
 
-		print(recv_header)
+		# print(recv_header)
 
 		if (recv_header[1] != SYN):
 			print("Error: Received packet is not SYN")
@@ -217,12 +222,12 @@ class socket:
 		# recv SYN-ACK C
 		(data, address) = MAIN_SOCKET.recvfrom(HEADER_LEN)
 
-		print(struct.unpack(PKT_HEADER_FMT, data))
+		# print(struct.unpack(PKT_HEADER_FMT, data))
 
 		# Mark connection as set
 		CONNECTION_SET = True
 
-		return (MAIN_SOCKET, address)
+		return (self, address)
 
 	def close(self):   # fill in your code here 
 		global CONNECTION_SET
@@ -234,54 +239,98 @@ class socket:
 		# Start timer
 		# If timeout, send same packet again
 
+		# Packet size
+		packet_size = 2048
+
 		# Create header
 		payload_len = len(buffer)
-		print("packet size %d" % payload_len)
-		flags = 1 # ...
-		seq_num = 1 # ...
-		ack_num = 1 # ...
+		flags = 0
+		seq_num = 0
+		highest_ack_num = packet_size * -1
 
 		# Set timeout to 0.2 seconds
 		MAIN_SOCKET.settimeout(0.2)
 
-		bytessent = 0
-		send_upto = 1024
-
-		# while (bytessent < payload_len):
-
-		# Get full size of data to be sent
-		header_and_buffer = send_upto + HEADER_LEN
-
-		PKT_HEADER_FMT = '!BBBBHHLLQQLL'
 		PKT_HEADER_DATA = struct.Struct(PKT_HEADER_FMT)
 
-		header = PKT_HEADER_DATA.pack(	VERSION,
-										flags,
-										OPT_PTR,
-										PROTOCOL,
-										HEADER_LEN,
-										CHECKSUM,
-										SRC_PORT,
-										DEST_PORT,
-										seq_num,
-										ack_num,
-										WINDOW,
-										payload_len)
+		# Total bytes to be sent
+		# bytes_to_send = payload_len + (HEADER_LEN * math.ceil(payload_len / packet_size))
 
-		# Attempt to send packet
-		try:
-			bytessent += MAIN_SOCKET.send(header+buffer)
-		except syssock.error: 
-			print("Failed to send packet, trying again")
+		times_to_attempt = 5
+		attempted = 0
+		
+		while (seq_num < payload_len and attempted < times_to_attempt):
+			header = PKT_HEADER_DATA.pack(	VERSION,
+											flags,
+											OPT_PTR,
+											PROTOCOL,
+											HEADER_LEN,
+											CHECKSUM,
+											SRC_PORT,
+											DEST_PORT,
+											seq_num,
+											0,
+											WINDOW,
+											packet_size)
+			try:
 
-		return bytessent 
+				# Attempt to send packet
+				gap = seq_num + packet_size
+				end_dist = gap if gap < payload_len else payload_len
+
+				# Add number of bytes sent
+				seq_num += MAIN_SOCKET.send(header+buffer[seq_num:end_dist])
+				# Exclude size of header
+				seq_num -= HEADER_LEN
+				
+				# Attempt to receive ACK
+				ack_header = MAIN_SOCKET.recv(HEADER_LEN)
+
+				unpacked_ack_header = struct.unpack(PKT_HEADER_FMT, ack_header)
+
+				# If received ACK num higher than current, update highest_ack_num
+				if (unpacked_ack_header[9] > highest_ack_num):
+					highest_ack_num = unpacked_ack_header[9]
+
+			except syssock.error:
+				attempted += 1
+				seq_num = highest_ack_num + packet_size
+				print("Failed to send packet, trying again")
+				
+
+
+		return 0 if attempted == 5 else seq_num 
 
 	def recv(self, nbytes):
 		# Packets recv
 		# Send right ACK
-		# data = MAIN_SOCKET.recv(nbytes+HEADER_LEN)
-		print("pickles")
-		longPacker = struct.Struct("!L")
-		fileLenPacked = longPacker.pack(filesize)
-		return fileLenPacked
-		# return data[HEADER_LEN:]
+
+		try:
+			data = MAIN_SOCKET.recv(nbytes+HEADER_LEN)
+			to_return = data[HEADER_LEN:]
+
+			# Unpack header
+			unpacked_header = struct.unpack(PKT_HEADER_FMT, data[:HEADER_LEN])
+			
+			# Gets sequence number and assigns to ack_num
+			ack_num = unpacked_header[8]
+
+			header = PKT_HEADER_DATA.pack(	VERSION,
+											ACK,
+											OPT_PTR,
+											PROTOCOL,
+											HEADER_LEN,
+											CHECKSUM,
+											SRC_PORT,
+											DEST_PORT,
+											0,
+											ack_num,
+											WINDOW,
+											0)
+			bop = MAIN_SOCKET.sendto(header, cl_addr)
+		except syssock.error:
+			print("Error: recv failed")
+			to_return = None
+
+
+		return to_return
