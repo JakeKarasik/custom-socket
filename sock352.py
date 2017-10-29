@@ -2,7 +2,6 @@ import binascii
 import socket as syssock
 import struct
 import sys
-import math
 
 # these functions are global to the class and
 # define the UDP ports all messages are sent
@@ -43,7 +42,6 @@ def init(UDPportTx, UDPportRx):   # initialize your UDP socket here
 	global CONNECTION_SET
 	CONNECTION_SET = False
 
-	global cl_addr
 class socket:
     
 	def __init__(self):
@@ -135,8 +133,6 @@ class socket:
 		response = "".join(response)
 		response_as_struct = struct.unpack(PKT_HEADER_FMT,response)
 
-		# print(response_as_struct)
-
 		# Check correct response
 		if (response_as_struct[1] != SYN | ACK and response_as_struct[1] != RES):
 			print("Error: Received packet is not SYN-ACK or RES")
@@ -181,14 +177,10 @@ class socket:
 		# recv SYN A
 		(data, address) = MAIN_SOCKET.recvfrom(HEADER_LEN)
 
-		global cl_addr
-		cl_addr = address
-
 	    # Check is valid SYN
 		recv_header = struct.unpack(PKT_HEADER_FMT, data)
 
-		# print(recv_header)
-
+		# Warn if invalid packet received
 		if (recv_header[1] != SYN):
 			print("Error: Received packet is not SYN")
 
@@ -222,8 +214,6 @@ class socket:
 		# recv SYN-ACK C
 		(data, address) = MAIN_SOCKET.recvfrom(HEADER_LEN)
 
-		# print(struct.unpack(PKT_HEADER_FMT, data))
-
 		# Mark connection as set
 		CONNECTION_SET = True
 
@@ -242,7 +232,7 @@ class socket:
 		# Packet size
 		packet_size = 2048
 
-		# Create header
+		# Initialize header properties
 		payload_len = len(buffer)
 		flags = 0
 		seq_num = 0
@@ -253,13 +243,12 @@ class socket:
 
 		PKT_HEADER_DATA = struct.Struct(PKT_HEADER_FMT)
 
-		# Total bytes to be sent
-		# bytes_to_send = payload_len + (HEADER_LEN * math.ceil(payload_len / packet_size))
-
 		times_to_attempt = 5
 		attempted = 0
 		
 		while (seq_num < payload_len and attempted < times_to_attempt):
+
+			# Create header
 			header = PKT_HEADER_DATA.pack(	VERSION,
 											flags,
 											OPT_PTR,
@@ -273,19 +262,20 @@ class socket:
 											WINDOW,
 											packet_size)
 			try:
-
-				# Attempt to send packet
+				# Get size of packet to send
 				gap = seq_num + packet_size
 				end_dist = gap if gap < payload_len else payload_len
 
 				# Add number of bytes sent
 				seq_num += MAIN_SOCKET.send(header+buffer[seq_num:end_dist])
+
 				# Exclude size of header
 				seq_num -= HEADER_LEN
 				
 				# Attempt to receive ACK
 				ack_header = MAIN_SOCKET.recv(HEADER_LEN)
 
+				# Unpack received header
 				unpacked_ack_header = struct.unpack(PKT_HEADER_FMT, ack_header)
 
 				# If received ACK num higher than current, update highest_ack_num
@@ -295,7 +285,7 @@ class socket:
 			except syssock.error:
 				attempted += 1
 				seq_num = highest_ack_num + packet_size
-				print("Failed to send packet, trying again")
+				print("Error: send() failed, trying again")
 				
 
 
@@ -306,7 +296,8 @@ class socket:
 		# Send right ACK
 
 		try:
-			data = MAIN_SOCKET.recv(nbytes+HEADER_LEN)
+			# Attempt to receive packet
+			(data, address) = MAIN_SOCKET.recvfrom(nbytes+HEADER_LEN)
 			to_return = data[HEADER_LEN:]
 
 			# Unpack header
@@ -315,6 +306,7 @@ class socket:
 			# Gets sequence number and assigns to ack_num
 			ack_num = unpacked_header[8]
 
+			# Create ACK header
 			header = PKT_HEADER_DATA.pack(	VERSION,
 											ACK,
 											OPT_PTR,
@@ -327,9 +319,10 @@ class socket:
 											ack_num,
 											WINDOW,
 											0)
-			MAIN_SOCKET.sendto(header, cl_addr)
+			# Attempt to send ACK
+			MAIN_SOCKET.sendto(header, address)
 		except syssock.error:
-			print("Error: recv failed")
+			print("Error: recv() failed")
 			to_return = None
 
 
