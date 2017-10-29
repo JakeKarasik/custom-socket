@@ -27,8 +27,8 @@ def init(UDPportTx, UDPportRx):   # initialize your UDP socket here
 	PROTOCOL = 0
 	SRC_PORT = 0
 	DEST_PORT = 0
-	WINDOW = 0 # Unused for part 1
-	CHECKSUM = 0 # Unused for part 1
+	WINDOW = 0
+	CHECKSUM = 0
 
 	# Flags
 	global SYN, FIN, ACK, RES, OPT
@@ -233,11 +233,51 @@ class socket:
 		# Send data
 		# Start timer
 		# If timeout, send same packet again
-	    bytessent = 0
-	    return bytessent 
+
+		# Create header
+		payload_len = len(buffer)
+		print("packet size %d" % payload_len)
+		flags = 1 # ...
+		seq_num = 1 # ...
+		ack_num = 1 # ...
+
+		# Set timeout to 0.2 seconds
+		MAIN_SOCKET.settimeout(0.2)
+
+		bytessent = 0
+		send_upto = 1024
+
+		while (bytessent < payload_len):
+
+			# Get full size of data to be sent
+			header_and_buffer = send_upto + HEADER_LEN
+
+			PKT_HEADER_FMT = '!BBBBHHLLQQLL'
+			PKT_HEADER_DATA = struct.Struct(PKT_HEADER_FMT)
+
+			header = PKT_HEADER_DATA.pack(	VERSION,
+											flags,
+											OPT_PTR,
+											PROTOCOL,
+											HEADER_LEN,
+											CHECKSUM,
+											SRC_PORT,
+											DEST_PORT,
+											seq_num,
+											ack_num,
+											WINDOW,
+											payload_len)
+
+			# Attempt to send packet
+			try:
+				bytessent += MAIN_SOCKET.send(header + buffer)
+			except syssock.error: 
+				print("Failed to send packet, trying again")
+
+		return bytessent 
 
 	def recv(self, nbytes):
 		# Packets recv
 		# Send right ACK
 	    bytesreceived = 0
-	    return bytesreceived
+	    return MAIN_SOCKET.recv(nbytes+HEADER_LEN+10000)

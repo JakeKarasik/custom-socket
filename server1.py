@@ -71,7 +71,7 @@ def main():
 
     # when accept returns, the client is connected 
     (s2,address) = s.accept()
-    exit(0)
+    
     # this receives the size of the file
     # as a 4 byte integer in network byte order (big endian)
     longPacker = struct.Struct("!L")
