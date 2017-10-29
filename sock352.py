@@ -247,37 +247,41 @@ class socket:
 		bytessent = 0
 		send_upto = 1024
 
-		while (bytessent < payload_len):
+		# while (bytessent < payload_len):
 
-			# Get full size of data to be sent
-			header_and_buffer = send_upto + HEADER_LEN
+		# Get full size of data to be sent
+		header_and_buffer = send_upto + HEADER_LEN
 
-			PKT_HEADER_FMT = '!BBBBHHLLQQLL'
-			PKT_HEADER_DATA = struct.Struct(PKT_HEADER_FMT)
+		PKT_HEADER_FMT = '!BBBBHHLLQQLL'
+		PKT_HEADER_DATA = struct.Struct(PKT_HEADER_FMT)
 
-			header = PKT_HEADER_DATA.pack(	VERSION,
-											flags,
-											OPT_PTR,
-											PROTOCOL,
-											HEADER_LEN,
-											CHECKSUM,
-											SRC_PORT,
-											DEST_PORT,
-											seq_num,
-											ack_num,
-											WINDOW,
-											payload_len)
+		header = PKT_HEADER_DATA.pack(	VERSION,
+										flags,
+										OPT_PTR,
+										PROTOCOL,
+										HEADER_LEN,
+										CHECKSUM,
+										SRC_PORT,
+										DEST_PORT,
+										seq_num,
+										ack_num,
+										WINDOW,
+										payload_len)
 
-			# Attempt to send packet
-			try:
-				bytessent += MAIN_SOCKET.send(header + buffer)
-			except syssock.error: 
-				print("Failed to send packet, trying again")
+		# Attempt to send packet
+		try:
+			bytessent += MAIN_SOCKET.send(header+buffer)
+		except syssock.error: 
+			print("Failed to send packet, trying again")
 
 		return bytessent 
 
 	def recv(self, nbytes):
 		# Packets recv
 		# Send right ACK
-	    bytesreceived = 0
-	    return MAIN_SOCKET.recv(nbytes+HEADER_LEN+10000)
+		# data = MAIN_SOCKET.recv(nbytes+HEADER_LEN)
+		print("pickles")
+		longPacker = struct.Struct("!L")
+		fileLenPacked = longPacker.pack(filesize)
+		return fileLenPacked
+		# return data[HEADER_LEN:]
