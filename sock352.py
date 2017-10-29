@@ -39,7 +39,7 @@ def init(UDPportTx, UDPportRx):   # initialize your UDP socket here
 	OPT = 0b00010000
 
 	# Connection is set?
-	global CONNECT_SET
+	global CONNECTION_SET
 	CONNECTION_SET = False
 
 class socket:
@@ -191,9 +191,9 @@ class socket:
 		seq_num = 29 # random number
 		ack_num = recv_header[8] + 1 # client seq_num + 1
 		payload_len = 0
-		
+
 		# If there is an existing connection, the RESET flag is set. 
-		flags = SYN | ACK if not CONNECT_SET else RES
+		flags = SYN | ACK if not CONNECTION_SET else RES
 
 		# Create SYN ACK B
 		syn_header = PKT_HEADER_DATA.pack(	VERSION,
@@ -227,7 +227,6 @@ class socket:
 	def close(self):   # fill in your code here 
 		global CONNECTION_SET
 		CONNECTION_SET = False
-	    return 
 
 	def send(self, buffer):
 		# Create header

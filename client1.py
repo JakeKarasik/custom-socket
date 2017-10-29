@@ -64,7 +64,6 @@ def main():
     # create a socket and connect to the remote server
     s = sock352.socket()
     s.connect((destination,port))
-    s.connect((destination,port))
     exit(0)
     # send the size of the file as a 4 byte integer
     # to the server, so it knows how much to read
