@@ -327,7 +327,7 @@ class socket:
 											ack_num,
 											WINDOW,
 											0)
-			bop = MAIN_SOCKET.sendto(header, cl_addr)
+			MAIN_SOCKET.sendto(header, cl_addr)
 		except syssock.error:
 			print("Error: recv failed")
 			to_return = None
