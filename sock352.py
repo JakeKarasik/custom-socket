@@ -9,6 +9,7 @@ import sys
 
 def init(UDPportTx, UDPportRx):   # initialize your UDP socket here
 	#Initialize UDP socket
+
 	global MAIN_SOCKET
 	MAIN_SOCKET = syssock.socket(syssock.AF_INET, syssock.SOCK_DGRAM)
 	
@@ -17,7 +18,7 @@ def init(UDPportTx, UDPportRx):   # initialize your UDP socket here
 	portRx = int(UDPportRx)
 	portTx = int(UDPportTx)
 
-    # Header Default Structure & Values
+	# Header Default Structure & Values
 	global PKT_HEADER_DATA, PKT_HEADER_FMT, HEADER_LEN, VERSION, OPT_PTR, PROTOCOL, SRC_PORT, DEST_PORT, WINDOW, CHECKSUM
 	PKT_HEADER_FMT = '!BBBBHHLLQQLL'
 	PKT_HEADER_DATA = struct.Struct(PKT_HEADER_FMT)
@@ -43,7 +44,7 @@ def init(UDPportTx, UDPportRx):   # initialize your UDP socket here
 	CONNECTION_SET = False
 
 class socket:
-    
+
 	def __init__(self):
 		pass
 
@@ -58,10 +59,10 @@ class socket:
 		# send ACK C
 		# If there is error, send header again
 
-	    # Connect to server address
+		# Connect to server address
 		MAIN_SOCKET.connect((address[0], portTx))
 
-	    # Create SYN header
+		# Create SYN header
 		seq_num = 19 # random number
 		ack_num = seq_num + 1
 		payload_len = 0
@@ -79,7 +80,7 @@ class socket:
 											WINDOW,
 											payload_len )
 
-	    # Set timeout to 0.2 seconds
+		# Set timeout to 0.2 seconds
 		MAIN_SOCKET.settimeout(0.2)
 
 		done = False
@@ -166,7 +167,7 @@ class socket:
 
 
 	def listen(self, backlog):
-	    return
+		return
 
 	def accept(self):
 		# recv SYN A
@@ -177,7 +178,7 @@ class socket:
 		# recv SYN A
 		(data, address) = MAIN_SOCKET.recvfrom(HEADER_LEN)
 
-	    # Check is valid SYN
+		# Check is valid SYN
 		recv_header = struct.unpack(PKT_HEADER_FMT, data)
 
 		# Warn if invalid packet received
@@ -219,7 +220,32 @@ class socket:
 
 		return (self, address)
 
-	def close(self):   # fill in your code here 
+	def close(self):   # fill in your code here
+
+		seq_num = 0  # random number
+		ack_num = 0
+		payload_len = 0
+
+		fin_header = PKT_HEADER_DATA.pack(VERSION,
+										  FIN,
+										  OPT_PTR,
+										  PROTOCOL,
+										  HEADER_LEN,
+										  CHECKSUM,
+										  SRC_PORT,
+										  DEST_PORT,
+										  seq_num,
+										  ack_num,
+										  WINDOW,
+										  payload_len)
+
+		try:
+			MAIN_SOCKET.sendall(fin_header)
+		except syssock.error:
+			pass
+		MAIN_SOCKET.shutdown(syssock.SHUT_RDWR)
+		MAIN_SOCKET.close()
+
 		global CONNECTION_SET
 		CONNECTION_SET = False
 
@@ -245,7 +271,7 @@ class socket:
 
 		times_to_attempt = 5
 		attempted = 0
-		
+
 		while (seq_num < payload_len and attempted < times_to_attempt):
 
 			# Create header
@@ -294,8 +320,8 @@ class socket:
 	def recv(self, nbytes):
 		# Packets recv
 		# Send right ACK
-
 		try:
+
 			# Attempt to receive packet
 			(data, address) = MAIN_SOCKET.recvfrom(nbytes+HEADER_LEN)
 			to_return = data[HEADER_LEN:]
