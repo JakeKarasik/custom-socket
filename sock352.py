@@ -7,9 +7,11 @@ import sys
 # define the UDP ports all messages are sent
 # and received from
 
+# jak451 - Jake Karasik
+# bk375 - Benjamin Ker
+
 def init(UDPportTx, UDPportRx):   # initialize your UDP socket here
 	#Initialize UDP socket
-
 	global MAIN_SOCKET
 	MAIN_SOCKET = syssock.socket(syssock.AF_INET, syssock.SOCK_DGRAM)
 	
@@ -103,7 +105,7 @@ class socket:
 			while not done:
 				try:
 					# Receive SYN ACK packet B
-					(data, address) = MAIN_SOCKET.recvfrom(HEADER_LEN)
+					data = MAIN_SOCKET.recv(HEADER_LEN)
 					
 					# Append packet to response array
 					response.append(data)
@@ -220,11 +222,7 @@ class socket:
 
 		return (self, address)
 
-	def close(self):   # fill in your code here
-
-		seq_num = 0  # random number
-		ack_num = 0
-		payload_len = 0
+	def close(self):
 
 		fin_header = PKT_HEADER_DATA.pack(VERSION,
 										  FIN,
@@ -234,15 +232,43 @@ class socket:
 										  CHECKSUM,
 										  SRC_PORT,
 										  DEST_PORT,
-										  seq_num,
-										  ack_num,
+										  0,
+										  0,
 										  WINDOW,
-										  payload_len)
+										  0)
+
+		ack_header = PKT_HEADER_DATA.pack(VERSION,
+										  ACK,
+										  OPT_PTR,
+										  PROTOCOL,
+										  HEADER_LEN,
+										  CHECKSUM,
+										  SRC_PORT,
+										  DEST_PORT,
+										  0,
+										  0,
+										  WINDOW,
+										  0)
+
+		# Set timeout to 0.2 seconds
+		MAIN_SOCKET.settimeout(0.2)
 
 		try:
 			MAIN_SOCKET.sendall(fin_header)
+
+			(resp, address) = MAIN_SOCKET.recvfrom(HEADER_LEN)
+
+			recv_header = struct.unpack(PKT_HEADER_FMT, resp)
+
+			if (recv_header[1] != ACK or recv_header[1] != FIN):
+				print("Error: Attempted to close but no ACK/FIN received.")
+				return
+
+			MAIN_SOCKET.sendall(ack_header)
 		except syssock.error:
+			# Timed out waiting for ACK/FIN
 			pass
+
 		MAIN_SOCKET.shutdown(syssock.SHUT_RDWR)
 		MAIN_SOCKET.close()
 
@@ -348,8 +374,7 @@ class socket:
 			# Attempt to send ACK
 			MAIN_SOCKET.sendto(header, address)
 		except syssock.error:
+			to_return = ""
 			print("Error: recv() failed")
-			to_return = None
-
 
 		return to_return
